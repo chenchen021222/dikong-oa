@@ -1,6 +1,6 @@
-import type { DatabaseSync } from 'node:sqlite'
+export declare function initDb(): Promise<void>
 
-export declare function openDb(dbPath: string): DatabaseSync
+export declare function queryAll(sql: string, params?: unknown[]): Promise<unknown[]>
 
 export declare function handle(
   dbPath: string,
@@ -8,6 +8,6 @@ export declare function handle(
   pathname: string,
   body: Record<string, unknown>,
   query: URLSearchParams,
-): { code: number; data: unknown }
+): Promise<{ code: number; data: unknown }>
 
 export declare const DEFAULT_DB_PATH: string

@@ -11,6 +11,7 @@ import {
   Setting,
   SwitchButton,
   User,
+  UserFilled,
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 
@@ -19,11 +20,16 @@ const router = useRouter()
 const auth = useAuthStore()
 
 const pageTitle = computed(() => (route.meta.title as string) ?? '工作台')
-const activeMenu = computed(() => (route.name === 'home' ? 'dashboard' : ''))
+const activeMenu = computed(() => {
+  if (route.name === 'users') return 'users'
+  if (route.name === 'home') return 'dashboard'
+  return ''
+})
 const avatarText = computed(() => auth.displayName.charAt(0).toUpperCase())
 
 const menuRoutes: Record<string, string> = {
   dashboard: '/',
+  users: '/users',
 }
 
 function onMenuSelect(index: string) {
@@ -57,6 +63,9 @@ function onUserCommand(command: string) {
         </el-menu-item>
         <el-menu-item index="attendance">
           <el-icon><Calendar /></el-icon>考勤管理
+        </el-menu-item>
+        <el-menu-item v-if="auth.isAdmin" index="users">
+          <el-icon><UserFilled /></el-icon>用户管理
         </el-menu-item>
         <el-menu-item index="settings">
           <el-icon><Setting /></el-icon>系统设置

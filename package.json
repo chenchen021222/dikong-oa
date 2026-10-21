@@ -15,6 +15,7 @@
     "@tauri-apps/plugin-deep-link": "^2.4.3",
     "@tauri-apps/plugin-shell": "^2.3.1",
     "element-plus": "^2.10.7",
+    "mysql2": "^3.15.3",
     "pinia": "^3.0.3",
     "vue": "^3.5.18",
     "vue-router": "^4.5.1"

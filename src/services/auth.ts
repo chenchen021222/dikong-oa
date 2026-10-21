@@ -133,6 +133,7 @@ interface LocalLoginResult {
   display_name: string | null
   phone?: string | null
   email?: string | null
+  role?: string | null
 }
 
 function toLocalSession(res: LocalLoginResult): Session {
@@ -147,6 +148,7 @@ function toLocalSession(res: LocalLoginResult): Session {
       username: res.username,
       phone: res.phone ?? '',
       email: res.email ?? '',
+      role: res.role === 'admin' ? 'admin' : 'user',
     },
   }
 }

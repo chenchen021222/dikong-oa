@@ -2,7 +2,7 @@
  * 禅道任务到期/超时邮件提醒
  *
  * 流程：
- *   1. 读 DiKongOA 本机 SQLite 里的用户列表（username / 姓名 / 已绑定邮箱）
+ *   1. 读 DiKongOA MySQL 里的用户列表（username / 姓名 / 已绑定邮箱）
  *   2. 读每个用户在个人中心绑定的禅道账号密码（settings 表，按用户隔离）
  *   3. 逐人登录禅道 REST API，拉取「我的地盘 - 指派给我的任务」
  *   4. 筛出「今天到期」和「已超时」的任务
@@ -15,11 +15,11 @@
  * 定时：Windows 计划任务 / schtasks 每天固定时间调本脚本即可，脚本跑完即退。
  */
 
-import { DatabaseSync } from 'node:sqlite'
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import nodemailer from 'nodemailer'
+import { queryAll } from '../local-server/db-api.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const cfg = JSON.parse(readFileSync(join(here, 'config.json'), 'utf-8'))
@@ -27,15 +27,6 @@ const DRY_RUN = process.argv.includes('--dry')
 
 // ---------- 配置 ----------
 const ZENTAO_BASE = cfg.zentao.base.replace(/\/$/, '')
-const DB_PATH =
-  cfg.dbPath ||
-  join(process.env.APPDATA ?? '', 'com.dikong.oa', 'dikong.db')
-
-if (!existsSync(DB_PATH)) {
-  console.error(`找不到应用数据库：${DB_PATH}`)
-  console.error('请确认桌面端至少登录过一次，或在 config.json 中手动指定 dbPath')
-  process.exit(1)
-}
 if (!DRY_RUN && (!cfg.smtp.host || cfg.smtp.host.startsWith('改成'))) {
   console.error('请先在 config.json 中填写 smtp.host（内网邮件服务器地址）')
   process.exit(1)
@@ -83,26 +74,12 @@ async function fetchMyTasks(token) {
 }
 
 // ---------- 读用户 + 禅道凭据 ----------
-const db = new DatabaseSync(DB_PATH, { readOnly: true })
-
-// 老版本数据库可能还没有 email 列（下次启动桌面端会自动迁移补上），这里自适应
-const userCols = new Set(
-  db.prepare('PRAGMA table_info(users)').all().map((c) => c.name),
-)
-const users = db
-  .prepare(
-    `SELECT id, username, display_name, ${userCols.has('email') ? 'email' : "NULL AS email"} FROM users`,
-  )
-  .all()
+const users = await queryAll('SELECT id, username, display_name, email FROM users')
 
 // settings 表 key 形如 "u3:zentao_cred"，value 为 {account,password} 的 JSON
-// 老库可能没有 settings 表（应用升级后首次启动才建），视为无人绑定
-const tableNames = new Set(
-  db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map((t) => t.name),
+const credRows = await queryAll(
+  "SELECT `key`, `value` FROM settings WHERE `key` LIKE 'u%:zentao_cred'",
 )
-const credRows = tableNames.has('settings')
-  ? db.prepare("SELECT key, value FROM settings WHERE key LIKE 'u%:zentao_cred'").all()
-  : []
 const credByUid = new Map()
 for (const r of credRows) {
   const uid = Number(r.key.split(':')[0].slice(1))
@@ -111,8 +88,6 @@ for (const r of credRows) {
     if (v?.account && v?.password) credByUid.set(uid, v)
   } catch { /* 忽略坏数据 */ }
 }
-db.close()
-
 console.log(`共 ${users.length} 个用户，其中 ${credByUid.size} 个绑定了禅道账号`)
 
 // ---------- 逐人巡检 ----------

@@ -12,6 +12,7 @@ import {
   updateLocalEmail,
   updateLocalPhone,
   updateLocalProfile,
+  webDb,
   type Session,
 } from '@/services/auth'
 
@@ -122,6 +123,35 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem(SESSION_KEY, JSON.stringify(session.value))
   }
 
+  const isAdmin = computed(() => session.value?.user?.role === 'admin')
+
+  /** 从数据服务刷新角色，已登录的管理员不用重新登录也能看到管理菜单 */
+  async function refreshMe(): Promise<void> {
+    const s = session.value
+    if (!s || s.providerId !== 'local') return
+    const me = await webDb<{
+      id: number
+      username: string
+      display_name: string | null
+      phone: string | null
+      email: string | null
+      role: string
+    }>(`/me?token=${encodeURIComponent(s.tokens.access_token)}`)
+    session.value = {
+      ...s,
+      user: {
+        ...(s.user ?? {}),
+        id: me.id,
+        username: me.username,
+        name: me.display_name ?? me.username,
+        phone: me.phone ?? '',
+        email: me.email ?? '',
+        role: me.role === 'admin' ? 'admin' : 'user',
+      },
+    }
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session.value))
+  }
+
   /** 资料是否已完善（本地账号要求绑定手机号 + 邮箱） */
   const isProfileComplete = computed(
     () => !!session.value?.user?.phone && !!session.value?.user?.email,
@@ -157,6 +187,8 @@ export const useAuthStore = defineStore('auth', () => {
     updateDisplayName,
     updatePhone,
     updateEmail,
+    isAdmin,
+    refreshMe,
     isProfileComplete,
     changePassword,
     logout,

@@ -5,6 +5,7 @@ import AuthCallback from '@/views/AuthCallback.vue'
 import AppLayout from '@/layouts/AppLayout.vue'
 import HomeView from '@/views/HomeView.vue'
 import ProfileView from '@/views/ProfileView.vue'
+import UsersView from '@/views/UsersView.vue'
 
 const router = createRouter({
   // 打包进 Tauri 时使用 hash 模式避免文件协议路由问题；
@@ -19,6 +20,12 @@ const router = createRouter({
       children: [
         { path: '', name: 'home', component: HomeView, meta: { title: '工作台' } },
         { path: 'profile', name: 'profile', component: ProfileView, meta: { title: '个人中心' } },
+        {
+          path: 'users',
+          name: 'users',
+          component: UsersView,
+          meta: { title: '用户管理', admin: true },
+        },
       ],
     },
   ],
@@ -29,6 +36,8 @@ router.beforeEach(async (to) => {
   if (to.meta.public) return true
   await auth.ensureFreshToken().catch(() => null)
   if (!auth.isAuthenticated) return { name: 'login', query: { redirect: to.fullPath } }
+  if (auth.session?.providerId === 'local') await auth.refreshMe().catch(() => null)
+  if (to.meta.admin && !auth.isAdmin) return { name: 'home' }
   // 本地账号首次登录先完善资料（手机号 + 邮箱），否则一律拦到个人中心
   if (
     auth.session?.providerId === 'local' &&

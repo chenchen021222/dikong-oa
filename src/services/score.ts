@@ -83,7 +83,7 @@ export async function fetchScoreRange(
     })
   } catch {
     throw new Error(
-      '无法连接绩效服务，请确认网络可访问 192.168.101.127:15050 或联系管理员',
+      '无法连接绩效服务。请确认能访问管理员电脑的转发地址 192.168.8.86:8619，或联系管理员',
     )
   }
   if (!res.ok) throw new Error(`绩效接口返回错误: ${res.status}`)
