@@ -1,0 +1,15 @@
+{
+  "zentao": {
+    "base": "http://你的禅道地址:端口"
+  },
+  "smtp": {
+    "host": "smtp.qq.com",
+    "port": 465,
+    "secure": true,
+    "user": "发件QQ邮箱",
+    "pass": "QQ邮箱SMTP授权码",
+    "from": "DiKongOA 任务提醒 <发件QQ邮箱>"
+  },
+  "dbPath": "",
+  "sendEmpty": false
+}

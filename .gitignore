@@ -1,0 +1,20 @@
+node_modules
+dist
+src-tauri/target
+*.local
+*.local.ts
+.DS_Store
+
+# 含邮箱授权码等凭据
+server/task-notifier/config.json
+
+# 监听工具（桌面本地运行，不应上传）
+Desktop/监听
+监听/
+
+# Vite 缓存
+.vite
+
+# 系统文件
+Thumbs.db
+.DS_Store

@@ -1,0 +1,13 @@
+{
+  "name": "dikong-task-notifier",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "禅道任务到期/超时邮件提醒（每日定时巡检 DiKongOA 本机用户）",
+  "scripts": {
+    "start": "node --experimental-sqlite notifier.mjs"
+  },
+  "dependencies": {
+    "nodemailer": "^6.9.16"
+  }
+}
