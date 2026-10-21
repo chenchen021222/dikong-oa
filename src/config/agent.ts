@@ -6,11 +6,18 @@
  *   1. 环境变量 VITE_DEEPSEEK_API_KEY（.env.local，不入库）
  *   2. 本地文件 agent.local.ts（不入库，复制自 agent.local.example.ts）
  *
+ * agent.local.ts 用 glob 读取：仓库里没有这个文件时构建仍然通过。
+ *
  *   VITE_DEEPSEEK_BASE_URL  接口地址，默认 https://api.deepseek.com
  *   VITE_DEEPSEEK_MODEL     模型名，deepseek-chat | deepseek-reasoner
  */
 
-import { agentSecrets } from './agent.local'
+const localSecrets = import.meta.glob('./agent.local.ts', {
+  eager: true,
+  import: 'agentSecrets',
+}) as Record<string, { deepseekApiKey?: string }>
+
+const localApiKey = Object.values(localSecrets)[0]?.deepseekApiKey ?? ''
 
 export interface AgentConfig {
   baseUrl: string
@@ -26,7 +33,7 @@ export interface AgentConfig {
 export const agentConfig: AgentConfig = {
   baseUrl: import.meta.env.VITE_DEEPSEEK_BASE_URL ?? 'https://api.deepseek.com',
   model: import.meta.env.VITE_DEEPSEEK_MODEL ?? 'deepseek-chat',
-  apiKey: import.meta.env.VITE_DEEPSEEK_API_KEY || agentSecrets.deepseekApiKey,
+  apiKey: import.meta.env.VITE_DEEPSEEK_API_KEY || localApiKey,
   temperature: 0.7,
   maxTokens: 4096,
   systemPrompt:
