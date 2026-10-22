@@ -18,3 +18,7 @@ Desktop/监听
 # 系统文件
 Thumbs.db
 .DS_Store
+
+# 服务器部署私钥
+deploy/dikong_deploy
+deploy/dikong_deploy.pub

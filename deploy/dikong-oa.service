@@ -1,0 +1,17 @@
+[Unit]
+Description=DiKong OA data service
+After=network.target mysql.service
+
+[Service]
+WorkingDirectory=/opt/dikong-oa/server
+Environment=DIKONG_MYSQL_CONFIG=/opt/dikong-oa/mysql.json
+Environment=DIKONG_MAIL_CONFIG=/opt/dikong-oa/mail.json
+Environment=DIKONG_MINIO_CONFIG=/opt/dikong-oa/minio.json
+Environment=PORT=8618
+Environment=SCORE_PORT=8619
+ExecStart=/usr/bin/node server.mjs
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

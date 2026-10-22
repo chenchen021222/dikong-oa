@@ -12,12 +12,13 @@ import {
   fetchMyWork,
   isOverdue,
   loadCachedTasks,
+  loadServerZentaoCred,
   loadZentaoConfig,
   loadZentaoCred,
   overdueDays,
   saveTasksToDb,
-  saveZentaoConfig,
   saveZentaoCred,
+  syncZentaoCred,
   zentaoLogin,
   zentaoToolExecutor,
   ztCloseWindow,
@@ -27,6 +28,10 @@ import {
 
 const auth = useAuthStore()
 const sessionToken = computed(() => auth.session?.tokens.access_token ?? '')
+const sessionUserId = computed(() => {
+  const id = auth.session?.user?.id
+  return typeof id === 'string' || typeof id === 'number' ? id : undefined
+})
 
 const tasks = ref<ZentaoItem[]>([])
 const loading = ref(false)
@@ -146,45 +151,47 @@ async function bindAndConnect() {
     return
   }
   cred.value = { account, password: bindPassword.value }
-  await saveZentaoCred(sessionToken.value, cred.value)
+  await saveZentaoCred(sessionToken.value, cred.value, sessionUserId.value)
   bindPassword.value = ''
   connectInteractive()
 }
 
 async function unbind() {
   cred.value = null
-  await saveZentaoCred(sessionToken.value, null)
+  await saveZentaoCred(sessionToken.value, null, sessionUserId.value)
 }
 
 function disconnect() {
   localStorage.removeItem(FLAG_KEY)
-  cred.value = null
-  saveZentaoCred(sessionToken.value, null)
-  saveZentaoConfig(null)
   tasks.value = []
   agentSummary.value = ''
   phase.value = 'idle'
+  token.value = ''
   ztCloseWindow()
 }
 
 // ---- Web 预览兜底：账号密码直连 ----
-const config = ref(loadZentaoConfig())
+const config = ref(loadZentaoConfig(sessionUserId.value))
 const account = ref(config.value?.account ?? '')
 const password = ref('')
 const token = ref('')
 const connecting = ref(false)
 
 async function connectWeb() {
-  if (!account.value || !password.value) {
+  const saved = config.value
+  const accountName = account.value.trim() || saved?.account || ''
+  const pass = password.value || saved?.password || ''
+  if (!accountName || !pass) {
     ElMessage.warning('请填写禅道账号和密码')
     return
   }
   connecting.value = true
   try {
-    token.value = await zentaoLogin(account.value, password.value)
-    const cfg = { account: account.value, password: password.value }
-    saveZentaoConfig(cfg)
-    config.value = loadZentaoConfig()
+    token.value = await zentaoLogin(accountName, pass)
+    const cfg = { account: accountName, password: pass }
+    await saveZentaoCred(sessionToken.value, cfg, sessionUserId.value)
+    config.value = cfg
+    account.value = accountName
     password.value = ''
     await loadTasksWeb()
   } catch (e) {
@@ -192,6 +199,15 @@ async function connectWeb() {
   } finally {
     connecting.value = false
   }
+}
+
+async function unbindWeb() {
+  config.value = null
+  account.value = ''
+  password.value = ''
+  token.value = ''
+  phase.value = 'idle'
+  await saveZentaoCred(sessionToken.value, null, sessionUserId.value)
 }
 
 async function loadTasksWeb() {
@@ -220,7 +236,8 @@ onMounted(async () => {
       tasks.value = cached
       phase.value = 'ready'
     }
-    cred.value = await loadZentaoCred(sessionToken.value)
+    await syncZentaoCred(sessionToken.value, sessionUserId.value)
+    cred.value = await loadZentaoCred(sessionToken.value, sessionUserId.value)
     // 连过一次的会话 cookie 仍在 webview 里 / 有凭据可自动登录 → 静默重读
     if (localStorage.getItem(FLAG_KEY)) connectInteractive()
     // 定时自动刷新，保持任务数据实时
@@ -229,13 +246,20 @@ onMounted(async () => {
     }, REFRESH_MS)
     return
   }
-  const cfg = config.value
+  const remote = await loadServerZentaoCred(sessionToken.value)
+  const local = loadZentaoConfig(sessionUserId.value)
+  const cfg = remote ?? local
+  if (cfg && !remote) await saveZentaoCred(sessionToken.value, cfg, sessionUserId.value)
+  if (cfg) {
+    config.value = cfg
+    account.value = cfg.account
+  }
   if (!cfg || !ZENTAO_API_BASE) return
   try {
     token.value = await zentaoLogin(cfg.account, cfg.password)
     await loadTasksWeb()
   } catch {
-    config.value = null
+    /* 凭据已保存，禅道暂时连不上时仍显示已绑定 */
   }
 })
 
@@ -319,20 +343,30 @@ onUnmounted(() => clearInterval(refreshTimer))
     </template>
 
     <template v-else>
-      <!-- Web 预览：账号密码直连 -->
       <div v-if="phase !== 'ready'" class="zt-login">
-        <el-input v-model="account" placeholder="禅道账号" class="zt-input" />
-        <el-input
-          v-model="password"
-          type="password"
-          show-password
-          placeholder="禅道密码"
-          class="zt-input"
-          @keyup.enter="connectWeb"
-        />
-        <el-button type="primary" :icon="Link" :loading="connecting" @click="connectWeb">
-          连接禅道
-        </el-button>
+        <template v-if="config?.account">
+          <span class="zt-hint">已绑定 <b>{{ config.account }}</b></span>
+          <div class="zt-bind-form">
+            <el-button type="primary" :icon="Link" :loading="connecting" @click="connectWeb">
+              连接禅道
+            </el-button>
+            <el-button text type="danger" @click="unbindWeb">解绑</el-button>
+          </div>
+        </template>
+        <template v-else>
+          <el-input v-model="account" placeholder="禅道账号" class="zt-input" />
+          <el-input
+            v-model="password"
+            type="password"
+            show-password
+            placeholder="禅道密码"
+            class="zt-input"
+            @keyup.enter="connectWeb"
+          />
+          <el-button type="primary" :icon="Link" :loading="connecting" @click="connectWeb">
+            连接禅道
+          </el-button>
+        </template>
       </div>
     </template>
 

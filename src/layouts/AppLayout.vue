@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -14,6 +14,7 @@ import {
   UserFilled,
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
+import { syncZentaoCred } from '@/services/zentao'
 
 const route = useRoute()
 const router = useRouter()
@@ -22,6 +23,7 @@ const auth = useAuthStore()
 const pageTitle = computed(() => (route.meta.title as string) ?? '工作台')
 const activeMenu = computed(() => {
   if (route.name === 'users') return 'users'
+  if (route.name === 'settings') return 'settings'
   if (route.name === 'home') return 'dashboard'
   return ''
 })
@@ -30,6 +32,7 @@ const avatarText = computed(() => auth.displayName.charAt(0).toUpperCase())
 const menuRoutes: Record<string, string> = {
   dashboard: '/',
   users: '/users',
+  settings: '/settings',
 }
 
 function onMenuSelect(index: string) {
@@ -37,6 +40,16 @@ function onMenuSelect(index: string) {
   if (target) router.push(target)
   else ElMessage.info('模块建设中，敬请期待')
 }
+
+onMounted(() => {
+  const token = auth.session?.tokens.access_token
+  const userId = auth.session?.user?.id
+  if (token) {
+    syncZentaoCred(token, typeof userId === 'string' || typeof userId === 'number' ? userId : undefined).catch(
+      () => {},
+    )
+  }
+})
 
 function onUserCommand(command: string) {
   if (command === 'profile') router.push('/profile')
@@ -67,7 +80,7 @@ function onUserCommand(command: string) {
         <el-menu-item v-if="auth.isAdmin" index="users">
           <el-icon><UserFilled /></el-icon>用户管理
         </el-menu-item>
-        <el-menu-item index="settings">
+        <el-menu-item v-if="auth.isAdmin" index="settings">
           <el-icon><Setting /></el-icon>系统设置
         </el-menu-item>
       </el-menu>

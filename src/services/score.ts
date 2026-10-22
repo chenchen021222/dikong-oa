@@ -66,10 +66,9 @@ export interface ScoreRangeResponse {
   [key: string]: unknown
 }
 
-// Web 开发环境走 vite 代理避免跨域；Tauri / 生产环境走管理员电脑的代理绕过 webview 限制
-const PROXY_SCORE = 'http://192.168.8.86:8619/score-api'
-const base =
-  import.meta.env.DEV && !isTauri ? '/score-api' : PROXY_SCORE
+// 浏览器走当前站点的 /score-api；桌面端走服务器上的绩效转发
+const PROXY_SCORE = 'http://192.168.101.172:8619/score-api'
+const base = isTauri ? PROXY_SCORE : '/score-api'
 
 export async function fetchScoreRange(
   role: ScoreRole,
@@ -83,7 +82,7 @@ export async function fetchScoreRange(
     })
   } catch {
     throw new Error(
-      '无法连接绩效服务。请确认能访问管理员电脑的转发地址 192.168.8.86:8619，或联系管理员',
+      '无法连接绩效服务。请确认能访问 192.168.101.172，或联系管理员',
     )
   }
   if (!res.ok) throw new Error(`绩效接口返回错误: ${res.status}`)

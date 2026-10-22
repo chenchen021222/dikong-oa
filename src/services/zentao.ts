@@ -20,25 +20,46 @@ export interface ZentaoItem {
   [key: string]: unknown
 }
 
-const CFG_KEY = 'zentao:config'
+const LEGACY_CFG_KEY = 'zentao:config'
 
 export interface ZentaoConfig {
   account: string
   password: string
 }
 
-export function loadZentaoConfig(): ZentaoConfig | null {
+function userCfgKey(userId?: string | number) {
+  if (userId == null || userId === '') return null
+  return `zentao:config:${userId}`
+}
+
+function readCfg(key: string): ZentaoConfig | null {
   try {
-    const raw = localStorage.getItem(CFG_KEY)
-    return raw ? JSON.parse(raw) : null
+    const raw = localStorage.getItem(key)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as ZentaoConfig
+    return parsed?.account && parsed?.password ? parsed : null
   } catch {
     return null
   }
 }
 
-export function saveZentaoConfig(cfg: ZentaoConfig | null) {
-  if (cfg) localStorage.setItem(CFG_KEY, JSON.stringify(cfg))
-  else localStorage.removeItem(CFG_KEY)
+/** 浏览器里的禅道账号按登录用户分开存，避免后登录的人覆盖前人的绑定 */
+export function loadZentaoConfig(userId?: string | number): ZentaoConfig | null {
+  const key = userCfgKey(userId)
+  if (key) {
+    const own = readCfg(key)
+    if (own) return own
+  }
+  return readCfg(LEGACY_CFG_KEY)
+}
+
+export function saveZentaoConfig(cfg: ZentaoConfig | null, userId?: string | number) {
+  const key = userCfgKey(userId)
+  if (key) {
+    if (cfg?.account && cfg?.password) localStorage.setItem(key, JSON.stringify(cfg))
+    else localStorage.removeItem(key)
+  }
+  localStorage.removeItem(LEGACY_CFG_KEY)
 }
 
 // ---- 凭据存储：单机走本机 SQLite（Tauri invoke / vite 中间件）----
@@ -46,28 +67,64 @@ export function saveZentaoConfig(cfg: ZentaoConfig | null) {
 const CRED_KEY = 'zentao_cred'
 const useInvoke = () => isTauri && !useRemoteDb
 
-export async function loadZentaoCred(token: string): Promise<ZentaoConfig | null> {
+function parseCred(raw: string | null | undefined): ZentaoConfig | null {
+  if (!raw) return null
   try {
-    const raw = useInvoke()
-      ? await invoke<string | null>('get_user_setting', { token, key: CRED_KEY })
-      : (await webDb<{ value: string | null }>(`/setting?token=${token}&key=${CRED_KEY}`)).value
-    return raw ? (JSON.parse(raw) as ZentaoConfig) : null
+    const parsed = JSON.parse(raw) as ZentaoConfig
+    if (!parsed?.account || !parsed?.password) return null
+    return parsed
   } catch {
-    return loadZentaoConfig()
+    return null
   }
 }
 
-export async function saveZentaoCred(token: string, cfg: ZentaoConfig | null): Promise<void> {
+/** 只读服务器（或桌面端数据库）里的禅道凭据，不看浏览器本地缓存 */
+export async function loadServerZentaoCred(token: string): Promise<ZentaoConfig | null> {
   try {
-    if (useInvoke()) {
-      await invoke('set_user_setting', { token, key: CRED_KEY, value: cfg ? JSON.stringify(cfg) : '' })
-    } else {
-      await webDb('/setting', { token, key: CRED_KEY, value: cfg ? JSON.stringify(cfg) : '' })
-    }
+    const raw = useInvoke()
+      ? await invoke<string | null>('get_user_setting', { token, key: CRED_KEY })
+      : (await webDb<{ value: string | null }>(`/setting?token=${encodeURIComponent(token)}&key=${CRED_KEY}`)).value
+    return parseCred(raw)
   } catch {
-    // 接口缺席时退回 localStorage
+    return null
   }
-  saveZentaoConfig(cfg)
+}
+
+export async function loadZentaoCred(token: string, userId?: string | number): Promise<ZentaoConfig | null> {
+  const remote = await loadServerZentaoCred(token)
+  return remote ?? loadZentaoConfig(userId)
+}
+
+async function writeServerCred(token: string, cfg: ZentaoConfig | null) {
+  const value = cfg ? JSON.stringify(cfg) : ''
+  if (useInvoke()) {
+    await invoke('set_user_setting', { token, key: CRED_KEY, value })
+  } else {
+    await webDb('/setting', { token, key: CRED_KEY, value })
+  }
+}
+
+export async function saveZentaoCred(
+  token: string,
+  cfg: ZentaoConfig | null,
+  userId?: string | number,
+): Promise<void> {
+  await writeServerCred(token, cfg)
+  saveZentaoConfig(cfg, userId)
+}
+
+/** 把当前登录用户浏览器里的禅道账号补写到他自己的服务器记录。 */
+export async function syncZentaoCred(token: string, userId?: string | number): Promise<void> {
+  if (!token) return
+  const remote = await loadServerZentaoCred(token)
+  if (remote) {
+    saveZentaoConfig(remote, userId)
+    return
+  }
+  const key = userCfgKey(userId)
+  const local = (key ? readCfg(key) : null) ?? readCfg(LEGACY_CFG_KEY)
+  if (!local) return
+  await saveZentaoCred(token, local, userId)
 }
 
 // ---- 任务缓存入库 ----

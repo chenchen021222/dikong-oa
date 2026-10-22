@@ -7,7 +7,6 @@ import { createConnection } from 'node:net'
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { DatabaseSync } from 'node:sqlite'
 import mysql from 'mysql2/promise'
 import bcrypt from 'bcryptjs'
 
@@ -132,6 +131,7 @@ async function migrateFromSqlite(conn) {
     return
   }
 
+  const { DatabaseSync } = await import('node:sqlite')
   const sqlite = new DatabaseSync(SQLITE_PATH, { readOnly: true })
   const users = sqlite.prepare(
     'SELECT id, username, password_hash, display_name, phone, email, created_at FROM users',
@@ -250,6 +250,12 @@ export async function queryAll(sql, params = []) {
   await initDb()
   const [rows] = await pool.execute(sql, params)
   return rows
+}
+
+export async function exec(sql, params = []) {
+  await initDb()
+  const [result] = await pool.execute(sql, params)
+  return result
 }
 
 async function uidByToken(db, token) {
@@ -491,6 +497,28 @@ const routes = {
   'GET /users': async (db, _b, q) => {
     await requireAdmin(db, q.get('token'))
     return db.all(`SELECT ${USER_FIELDS} FROM users ORDER BY id`)
+  },
+  'GET /admin/mail': async (db, _b, q) => {
+    await requireAdmin(db, q.get('token'))
+    const { getMailView } = await import('./mail-reminder.mjs')
+    return getMailView()
+  },
+  'POST /admin/mail': async (db, b) => {
+    await requireAdmin(db, b.token)
+    const { saveMailSettings, getMailView } = await import('./mail-reminder.mjs')
+    await saveMailSettings(b)
+    return getMailView()
+  },
+  'POST /images': async (db, b) => {
+    const uid = await uidByToken(db, String(b.token ?? ''))
+    const { putImage } = await import('./storage.mjs')
+    return putImage(uid, b)
+  },
+  'POST /admin/mail/send': async (db, b) => {
+    await requireAdmin(db, b.token)
+    const { sendReminders, getMailView } = await import('./mail-reminder.mjs')
+    await sendReminders({ trigger: 'manual' })
+    return getMailView()
   },
 }
 

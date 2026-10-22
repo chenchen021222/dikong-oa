@@ -6,6 +6,7 @@ import AppLayout from '@/layouts/AppLayout.vue'
 import HomeView from '@/views/HomeView.vue'
 import ProfileView from '@/views/ProfileView.vue'
 import UsersView from '@/views/UsersView.vue'
+import SettingsView from '@/views/SettingsView.vue'
 
 const router = createRouter({
   // 打包进 Tauri 时使用 hash 模式避免文件协议路由问题；
@@ -25,6 +26,12 @@ const router = createRouter({
           name: 'users',
           component: UsersView,
           meta: { title: '用户管理', admin: true },
+        },
+        {
+          path: 'settings',
+          name: 'settings',
+          component: SettingsView,
+          meta: { title: '系统设置', admin: true },
         },
       ],
     },

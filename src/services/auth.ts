@@ -159,21 +159,24 @@ function toLocalSession(res: LocalLoginResult): Session {
  * - 否则：Web 开发走 vite 中间件 /local-db；桌面端走 Tauri invoke 读本机库
  */
 /** Web 开发预览优先用同源 vite 中间件（免起面板）；打包/Tauri 走配置的远程地址 */
-/** 开发调试用 vite 中间件（同机 SQLite），生产打包统一连远程服务器 */
-const API_PREFIX =
-  import.meta.env.DEV && !isTauri ? '/local-db' : `${DATA_API_BASE}/local-db`
+/** 浏览器走当前站点的 /local-db；桌面端连服务器上的数据接口 */
+const API_PREFIX = isTauri ? `${DATA_API_BASE}/local-db` : '/local-db'
 
 /** 是否使用远程数据服务（生产打包时为 true） */
 export const useRemoteDb = !API_PREFIX.startsWith('/')
 
-export async function webDb<T>(path: string, body?: Record<string, unknown>): Promise<T> {
+export async function webDb<T>(
+  path: string,
+  body?: Record<string, unknown>,
+  timeoutMs = 8000,
+): Promise<T> {
   let res: Response
   try {
     res = await fetch(`${API_PREFIX}${path}`, {
       method: body === undefined ? 'GET' : 'POST',
       headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(timeoutMs),
     })
   } catch {
     throw new Error(

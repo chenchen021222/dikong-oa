@@ -1,0 +1,4 @@
+#!/bin/sh
+# 每次本地提交后发布到服务器。部署失败不会撤销这次提交。
+cd "$(dirname "$0")/../.." || exit 0
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File deploy/publish.ps1 || true
